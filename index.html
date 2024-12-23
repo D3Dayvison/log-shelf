@@ -38,6 +38,7 @@
     .product-item {
       display: flex;
       align-items: center;
+      justify-content: space-between;
       margin-bottom: 10px;
       border: 1px solid #ddd;
       padding: 10px;
@@ -101,6 +102,17 @@
       color: #007bff;
       font-weight: bold;
     }
+    .edit-button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    .edit-button:hover {
+      background-color: #0056b3;
+    }
   </style>
 </head>
 <body>
@@ -129,7 +141,8 @@
   const pdfButton = document.getElementById('pdf-button');
 
   let products = [];
-  const checkedStates = {}; // Armazena os estados das checkboxes
+  let filteredProducts = [];
+  const checkedStates = {};
 
   // Função para carregar o XML e exibir os produtos
   fileInput.addEventListener('change', (event) => {
@@ -144,42 +157,62 @@
       products = Array.from(detNodes).map(node => {
         const prod = node.getElementsByTagName('prod')[0];
         const sku = prod.getElementsByTagName('cProd')[0]?.textContent || '';
-        const quantity = node.getElementsByTagName('qCom')[0]?.textContent || 0; // Assumindo que 'qCom' é a quantidade
+        const quantity = node.getElementsByTagName('qCom')[0]?.textContent || 0;
         return {
           name: prod.getElementsByTagName('xProd')[0]?.textContent || '',
           sku,
           barcode: prod.getElementsByTagName('cEAN')[0]?.textContent || '',
-          quantity: parseInt(quantity, 10), // Converte a quantidade para inteiro
+          quantity: parseInt(quantity, 10),
+          checkedQuantity: 0
         };
       });
-      renderProducts(products);
+      filteredProducts = [...products]; // Inicializa a lista filtrada
+      renderProducts(filteredProducts);
     };
     reader.readAsText(file);
   });
 
-  // Função para renderizar produtos
+  // Função para renderizar os produtos
   function renderProducts(productArray) {
     productList.innerHTML = '';
     productArray.forEach(product => {
       const listItem = document.createElement('li');
       listItem.className = 'product-item';
       const isChecked = checkedStates[product.sku] || false;
+
       listItem.innerHTML = `
         <input type="checkbox" ${isChecked ? 'checked' : ''} data-sku="${product.sku}">
         <label>
           ${product.name} - 
           <span class="sku">SKU: ${product.sku}</span> - 
-          <span class="barcode">Código de Barras: ${product.barcode}</span> -
-          <span class="quantity">Quant.: ${product.quantity}</span>
+          <span class="barcode">Código de Barras: ${product.barcode}</span> - 
+          <span class="quantity">Quant.: ${product.checkedQuantity}/${product.quantity}</span>
         </label>
+        <button class="edit-button" data-sku="${product.sku}">Editar</button>
       `;
 
-      // Adicionar evento de clique ao item
       listItem.addEventListener('click', (e) => {
-        if (e.target.tagName !== 'INPUT') {
+        if (!e.target.classList.contains('edit-button')) {
           const checkbox = listItem.querySelector('input[type="checkbox"]');
           checkbox.checked = !checkbox.checked;
-          checkedStates[checkbox.dataset.sku] = checkbox.checked;
+          if (checkbox.checked) {
+            product.checkedQuantity = product.quantity;
+            checkedStates[product.sku] = true;
+          } else {
+            product.checkedQuantity = 0;
+            checkedStates[product.sku] = false;
+          }
+          renderProducts(filteredProducts);
+        }
+      });
+
+      const editButton = listItem.querySelector('.edit-button');
+      editButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const newQuantity = prompt(`Digite a quantidade conferida para "${product.name}" (atual: ${product.checkedQuantity}):`, product.checkedQuantity);
+        if (newQuantity !== null && !isNaN(newQuantity)) {
+          product.checkedQuantity = Math.min(parseInt(newQuantity, 10), product.quantity);
+          renderProducts(filteredProducts);
         }
       });
 
@@ -187,40 +220,39 @@
     });
   }
 
-  // Função de pesquisa
-  searchBar.addEventListener('input', (e) => {
-    const searchTerm = e.target.value.toLowerCase();
-    const filteredProducts = products.filter(product =>
-      product.name.toLowerCase().includes(searchTerm) ||
-      product.sku.toLowerCase().includes(searchTerm) ||
-      product.barcode.toLowerCase().includes(searchTerm)
-    );
+  // Função para filtrar produtos com base na pesquisa
+  searchBar.addEventListener('input', () => {
+    const searchTerm = searchBar.value.toLowerCase();
+    filteredProducts = products.filter(product => {
+      return (
+        product.name.toLowerCase().includes(searchTerm) ||
+        product.sku.toLowerCase().includes(searchTerm) ||
+        product.barcode.toLowerCase().includes(searchTerm)
+      );
+    });
     renderProducts(filteredProducts);
   });
 
-  // Função para gerar o PDF
   pdfButton.addEventListener('click', () => {
     const doc = new jsPDF();
     let y = 10;
-    const lineHeight = 5; // Altura das linhas
+    const lineHeight = 5;
 
-    doc.setFontSize(10); // Reduz o tamanho da fonte
+    doc.setFontSize(10);
 
-    // Função para verificar se é necessário adicionar uma nova página
     function checkPageOverflow() {
-      if (y > 270) { // 270 é o limite da página
+      if (y > 270) {
         doc.addPage();
         y = 10;
       }
     }
 
-    // Itens marcados
-    doc.text('Itens Marcados:', 10, y);
+    // Itens com quantidade total
+    doc.text('Produtos com Quantidade Total:', 10, y);
     y += lineHeight;
-    Object.entries(checkedStates).forEach(([sku, isChecked]) => {
-      const product = products.find(p => p.sku === sku);
-      if (isChecked && product) {
-        const text = `- ${product.name} (SKU: ${product.sku}, Código de Barras: ${product.barcode}, Quantidade: ${product.quantity})`;
+    filteredProducts.forEach(product => {
+      if (product.checkedQuantity === product.quantity) {
+        const text = `- ${product.name} (SKU: ${product.sku}, Código de Barras: ${product.barcode}, Quantidade: ${product.checkedQuantity}/${product.quantity})`;
         const lines = doc.splitTextToSize(text, 180);
         doc.text(lines, 10, y);
         y += lines.length * lineHeight;
@@ -230,12 +262,27 @@
 
     y += 10;
 
-    // Itens não marcados (simplificado)
-    doc.text('Itens Não Marcados:', 10, y);
+    // Itens com quantidade incompleta
+    doc.text('Produtos com Quantidade Incompleta:', 10, y);
     y += lineHeight;
-    products.forEach(product => {
-      if (!checkedStates[product.sku]) {
-        const text = `- ${product.name} (SKU: ${product.sku}, Código de Barras: ${product.barcode}, Quantidade: ${product.quantity})`;
+    filteredProducts.forEach(product => {
+      if (product.checkedQuantity > 0 && product.checkedQuantity < product.quantity) {
+        const text = `- ${product.name} (SKU: ${product.sku}, Código de Barras: ${product.barcode}, Quantidade: ${product.checkedQuantity}/${product.quantity})`;
+        const lines = doc.splitTextToSize(text, 180);
+        doc.text(lines, 10, y);
+        y += lines.length * lineHeight;
+        checkPageOverflow();
+      }
+    });
+
+    y += 10;
+
+    // Itens ausentes
+    doc.text('Produtos Ausentes:', 10, y);
+    y += lineHeight;
+    filteredProducts.forEach(product => {
+      if (product.checkedQuantity === 0) {
+        const text = `- ${product.name} (SKU: ${product.sku}, Código de Barras: ${product.barcode}, Quantidade: ${product.checkedQuantity}/${product.quantity})`;
         const lines = doc.splitTextToSize(text, 180);
         doc.text(lines, 10, y);
         y += lines.length * lineHeight;
