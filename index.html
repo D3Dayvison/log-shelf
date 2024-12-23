@@ -60,6 +60,10 @@
       color: blue;
       font-weight: bold;
     }
+    .quantity {
+      color: yellowgreen;
+      font-weight: bold;
+    }
     #pdf-button {
       position: fixed;
       bottom: 20px;
@@ -140,10 +144,12 @@
       products = Array.from(detNodes).map(node => {
         const prod = node.getElementsByTagName('prod')[0];
         const sku = prod.getElementsByTagName('cProd')[0]?.textContent || '';
+        const quantity = node.getElementsByTagName('qCom')[0]?.textContent || 0; // Assumindo que 'qCom' é a quantidade
         return {
           name: prod.getElementsByTagName('xProd')[0]?.textContent || '',
           sku,
           barcode: prod.getElementsByTagName('cEAN')[0]?.textContent || '',
+          quantity: parseInt(quantity, 10), // Converte a quantidade para inteiro
         };
       });
       renderProducts(products);
@@ -163,7 +169,8 @@
         <label>
           ${product.name} - 
           <span class="sku">SKU: ${product.sku}</span> - 
-          <span class="barcode">Código de Barras: ${product.barcode}</span>
+          <span class="barcode">Código de Barras: ${product.barcode}</span> -
+          <span class="quantity">Quant.: ${product.quantity}</span>
         </label>
       `;
 
@@ -213,7 +220,7 @@
     Object.entries(checkedStates).forEach(([sku, isChecked]) => {
       const product = products.find(p => p.sku === sku);
       if (isChecked && product) {
-        const text = `- ${product.name} (SKU: ${product.sku}, Código de Barras: ${product.barcode})`;
+        const text = `- ${product.name} (SKU: ${product.sku}, Código de Barras: ${product.barcode}, Quantidade: ${product.quantity})`;
         const lines = doc.splitTextToSize(text, 180);
         doc.text(lines, 10, y);
         y += lines.length * lineHeight;
@@ -228,7 +235,7 @@
     y += lineHeight;
     products.forEach(product => {
       if (!checkedStates[product.sku]) {
-        const text = `- ${product.name} (SKU: ${product.sku}, Código de Barras: ${product.barcode})`;
+        const text = `- ${product.name} (SKU: ${product.sku}, Código de Barras: ${product.barcode}, Quantidade: ${product.quantity})`;
         const lines = doc.splitTextToSize(text, 180);
         doc.text(lines, 10, y);
         y += lines.length * lineHeight;
